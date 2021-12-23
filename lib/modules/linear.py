@@ -131,7 +131,7 @@ class _GeneralizedLinear(torch.autograd.Function):
                 print(grad_input_flat.device)
                 print(grad_input_flat.device.type)
                 if grad_input_flat.dtype == adapter_first.dtype == grad_adapter_hid_flat.dtype \
-                        and grad_input_flat.device.type == 'cuda':
+                        and grad_input_flat.device.type in ('cpu', 'cuda'):
                     grad_input_flat = grad_input_flat.addmm_(grad_adapter_hid_flat, adapter_first)
                 else:
                     grad_input_flat = torch.addmm(grad_input_flat, grad_adapter_hid_flat, adapter_first)
