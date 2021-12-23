@@ -85,6 +85,10 @@ class TPUManager(mp.Process):
 
     def runner(self, tpu_index):
         """Run training steps from the perspective of a single TPU core"""
+        ### compute loss and gradients
+        import faulthandler
+        faulthandler.dump_traceback_later(120, repeat=False)
+
         # acquire the (unique) Cloud TPU core corresponding to this process's index
         device = xm.xla_device()
         logger.info(f"Process {tpu_index} is using {xm.xla_real_devices([str(device)])[0]}")
@@ -118,25 +122,18 @@ class TPUManager(mp.Process):
                     self._synchronizer.send_params_to_device(model)
                     self.should_load_parameters.value = False
 
-            ### compute loss and gradients
-            import faulthandler
-            faulthandler.dump_traceback_later(30, repeat=True)
 
-            def _compute():
-                loss = 0.0
-                for i in range(self.grad_accumulation_steps):
-                    print("FWD")
-                    inputs = next(data_loader_iter)
-                    outputs = model(**inputs)
-                    loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-                    loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-                    print("BWD")
-                    loss_i.backward()
-                    loss += loss_i
-                    del inputs, outputs, loss_i
-                return loss
-
-            xm.do_on_ordinals(_compute, data=(), ordinals=(0,))
+            loss = 0.0
+            for i in range(self.grad_accumulation_steps):
+                print("FWD")
+                inputs = next(data_loader_iter)
+                outputs = model(**inputs)
+                loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+                loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+                print("BWD")
+                loss_i.backward()
+                loss += loss_i
+                del inputs, outputs, loss_i
 
             xm.rendezvous("after_step")
             print("AFTERSTEP")
