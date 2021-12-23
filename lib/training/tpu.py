@@ -17,7 +17,7 @@ from hivemind.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-GRAD_CHUNK_NUMEL = 50_000_000  # allreduce at most this many parameters in one call to save memory
+GRAD_CHUNK_NUMEL = 50_000_000  # transfer at most this many gradients to host per call to save memory
 
 
 class TPUManager(mp.Process):
