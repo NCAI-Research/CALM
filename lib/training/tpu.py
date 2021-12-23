@@ -119,6 +119,8 @@ class TPUManager(mp.Process):
                     self.should_load_parameters.value = False
 
             ### compute loss and gradients
+            import faulthandler
+            faulthandler.dump_traceback_later(30, repeat=True)
 
             def _compute():
                 loss = 0.0
