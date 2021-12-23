@@ -17,6 +17,8 @@ from hivemind.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+GRAD_CHUNK_NUMEL = 50_000_000  # allreduce at most this many parameters in one call to save memory
+
 
 class TPUManager(mp.Process):
     """Auxiliary class that manages model training over an array of TPU cores"""
@@ -86,8 +88,6 @@ class TPUManager(mp.Process):
     def runner(self, tpu_index):
         """Run training steps from the perspective of a single TPU core"""
         ### compute loss and gradients
-        import faulthandler
-        faulthandler.dump_traceback_later(120, repeat=False)
 
         # acquire the (unique) Cloud TPU core corresponding to this process's index
         device = xm.xla_device()
@@ -203,12 +203,30 @@ class TPUSynchronizer:
             replica_grads = [param.grad for param in replica.parameters()]
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
             master_grads = [hp.grad for hp in self.master_model.parameters()]
+
+            # split gradients into chunks and run sequentially to save memory
+            source_chunk, target_chunk, chunk_size = [], [], 0
+            print("TOTAL SIZE", len(replica_grads))
+            assert len(master_grads) == len(replica_grads)
+            for source, target in zip(replica_grads, master_grads):
+                if len(source_chunk) != 0 and chunk_size + source.numel() >= GRAD_CHUNK_NUMEL:
+                    print("MOVING CHUNK", len(source_chunk), len(target_chunk), chunk_size)
+                    xm.do_on_ordinals(
+                        lambda *source_chunk: self._assign(source=source_chunk, target=target_chunk, add=add),
+                        data=tuple(source_chunk),
+                        ordinals=(0,),
+                    )  # ^-- do_on_ordinals already runs rendezvous at the end
+                    source_chunk, target_chunk, chunk_size = [], [], 0
+                source_chunk.append(source)
+                target_chunk.append(target)
+                chunk_size += source.numel()
+            print("MOVING FINAL CHUNK", len(source_chunk), len(target_chunk), chunk_size)
             xm.do_on_ordinals(
-                lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
-                data=tuple(replica_grads),
+                lambda *source_chunk: self._assign(source=source_chunk, target=target_chunk, add=add),
+                data=tuple(source_chunk),
                 ordinals=(0,),
             )
-            # ^-- do_on_ordinals already runs rendezvous at the end
+
 
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
         for source_tensor, target_tensor in zip_longest(source, target):
