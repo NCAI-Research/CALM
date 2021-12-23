@@ -33,6 +33,7 @@ class SharedLinear(nn.Linear):
     def __init__(self, shared_matrix: SharedMatrix, bias: bool = True):
         nn.Module.__init__(self)
         self.shared_matrix = shared_matrix
+        self.out_features, self.in_features = self.shared_matrix.shape
         self.bias = nn.Parameter(torch.zeros(self.out_features)) if bias else None
 
     @property
@@ -45,8 +46,8 @@ class AdaptedLinear(SharedLinear):
 
     def __init__(self, shared_matrix: SharedMatrix, adapter_dim: int = 64, bias: bool = True):
         nn.Module.__init__(self)
-        self.out_features, self.in_features = shared_matrix.shape
         self.shared_matrix = shared_matrix
+        self.out_features, self.in_features = shared_matrix.shape
         self.adapter_first = nn.Parameter(torch.zeros(adapter_dim, self.in_features))
         self.adapter_second = nn.Parameter(torch.zeros(self.out_features, adapter_dim))
         self.bias = nn.Parameter(torch.zeros(self.out_features)) if bias else None
