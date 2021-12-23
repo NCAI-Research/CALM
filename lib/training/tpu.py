@@ -104,6 +104,7 @@ class TPUManager(mp.Process):
                 logger.info(f"Process {tpu_index} initialized.")
 
         xm.rendezvous("init_finished")
+        print("INIT_FINISHED")
 
         while True:
             self.step_triggered.wait()
@@ -113,20 +114,26 @@ class TPUManager(mp.Process):
 
             if bool(self.should_load_parameters.value):
                 with self.lock if xm.is_master_ordinal() else nullcontext():
+                    print("LOADING_PARAMS")
                     self._synchronizer.send_params_to_device(model)
                     self.should_load_parameters.value = False
 
             ### compute loss and gradients
             loss = 0.0
             for i in range(self.grad_accumulation_steps):
+                print("FWD")
                 inputs = next(data_loader_iter)
                 outputs = model(**inputs)
                 loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
                 loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+                print("BWD")
                 loss_i.backward()
                 loss += loss_i
                 del inputs, outputs, loss_i
 
+
+            xm.rendezvous("after_step")
+            print("DONE")
             ### aggregate gradients from TPUs
             with self.lock if xm.is_master_ordinal() else nullcontext():
                 self._synchronizer.aggregate_grads_on_host(model, add=True)
@@ -155,7 +162,18 @@ class TPUSynchronizer:
             param.grad = param.grad.share_memory_()
 
     def get_device_model_replica(self, device: torch.device):
-        replica = deepcopy(self.master_model).to(device)
+        print("IN!!!")
+        with torch.no_grad():
+            memo = {}
+            for param in self.master_model.parameters():
+                memo[id(param)] = torch.nn.Parameter(param.detach().to(device).requires_grad_(param.requires_grad))
+                if param.grad is not None:
+                    memo[id(param.grad)] = None
+            for buf in self.master_model.buffers():
+                memo[id(buf)] = buf.to(device)
+            replica = deepcopy(self.master_model, memo=memo).to(device)
+        print("OUT!!!")
+
         self.post_init(replica)
         for param in replica.parameters():
             param.grad = torch.zeros_like(param, device=device)
@@ -205,7 +223,7 @@ class TPUSynchronizer:
 class TPUDataManager:
     """An auxiliary class that loads centralized dataset from master into multiple TPU devices"""
 
-    def __init__(self, dataset: torch.utils.data.Dataset, nprocs: int, master_prefetch: int = 16):
+    def __init__(self, dataset: torch.utils.data.Dataset, nprocs: int, master_prefetch: int = 4):
         self.dataset, self.nprocs = dataset, nprocs
         self.device_queues = [mp.Queue(master_prefetch) for _ in range(nprocs)]
         self._loader_thread = threading.Thread(target=self._load_data_into_queues)
