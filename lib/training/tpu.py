@@ -119,21 +119,25 @@ class TPUManager(mp.Process):
                     self.should_load_parameters.value = False
 
             ### compute loss and gradients
-            loss = 0.0
-            for i in range(self.grad_accumulation_steps):
-                print("FWD")
-                inputs = next(data_loader_iter)
-                outputs = model(**inputs)
-                loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-                loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-                print("BWD")
-                loss_i.backward()
-                loss += loss_i
-                del inputs, outputs, loss_i
 
+            def _compute():
+                loss = 0.0
+                for i in range(self.grad_accumulation_steps):
+                    print("FWD")
+                    inputs = next(data_loader_iter)
+                    outputs = model(**inputs)
+                    loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+                    loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+                    print("BWD")
+                    loss_i.backward()
+                    loss += loss_i
+                    del inputs, outputs, loss_i
+                return loss
+
+            xm.do_on_ordinals(_compute, data=(), ordinals=(0,))
 
             xm.rendezvous("after_step")
-            print("DONE")
+            print("AFTERSTEP")
             ### aggregate gradients from TPUs
             with self.lock if xm.is_master_ordinal() else nullcontext():
                 self._synchronizer.aggregate_grads_on_host(model, add=True)
