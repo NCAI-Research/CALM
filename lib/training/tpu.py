@@ -227,7 +227,6 @@ class TPUSynchronizer:
                 ordinals=(0,),
             )
 
-
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
         for source_tensor, target_tensor in zip_longest(source, target):
             assert source_tensor is not None or target_tensor is not None, "Source and target length must match exactly"
