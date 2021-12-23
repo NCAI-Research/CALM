@@ -128,6 +128,8 @@ class _GeneralizedLinear(torch.autograd.Function):
         if needs_input_grad[0]:
             grad_input_flat = torch.matmul(grad_output_flat, matrix)
             if adapter_first is not None:
+                print(grad_input_flat.device)
+                print(grad_input_flat.device.type)
                 if grad_input_flat.dtype == adapter_first.dtype == grad_adapter_hid_flat.dtype:
                     grad_input_flat = grad_input_flat.addmm_(grad_adapter_hid_flat, adapter_first)
                 else:
