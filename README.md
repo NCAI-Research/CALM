@@ -259,8 +259,24 @@ python run_trainer.py --run_id $EXP_NAME --host_maddrs $LISTEN_ON --announce_mad
 </details>
 
 <details>
-  <summary><b>Best (and worst) practices (TBA)</b></summary>
-  TODO
+  <summary><b>Best (and worst) practices</b></summary>
+    
+  __Hardware requirements:__ The code is meant to run with the following specs: 2-core CPU, 12gb RAM (more if you train a bigger model). Peers used as `--initial_peers` must be accessible by others, so you may need to open a network port for incoming connections. The rest depends on what role you're playing:
+
+      - __Auxiliary peers:__  If you use `--upload_interval X --repo_url Y` must have enough disk space to store all the checkpoints. For instance, assuming that training takes 1 month and the model+optimizer state takes 1GB, you will need 30GB with `--upload_interval 86400`, 60GB if `--upload_interval 28800`, etc. If `assist_in_averaging`, ensure you have at least 100Mbit/s bandwidth, more is better.
+    
+      - __Trainers__ need *some* means for compute: a GPU with at least 6GB memory or a TPU - as long as you can run pytorch on that. You will need to tune `--per_device_train_batch_size X` to fit into memory. Also, you can use `--fp16` even on old GPUs to save memory. Finally, `--gradient_checkpointing` can reduce memory usage at the cost of 30-40% slower training. Non-client-mode peers must have at least 100Mbit/s network bandwidth, mode is better.
+    
+    
+  (THE TEXT BELOW IS UNDER CONSTRUCTION)
+  
+  __Swarm composition:__ 2-3 peers with public IP as initial peers for redundancy.
+    
+__Support infrastructure: go cheap, go redundant.__ 
+
+<details>
+  <summary>Where to get cheap servers</summary>
+    - 
 
 - full redundancy, three instances of everything
 - client-to-averager ratio
@@ -274,5 +290,7 @@ Training chronicles:
   - 2021.12.19 - tested volunteer starter code
   - 2021.12.21-22 - started three initial peers: one on GCP, Pebblehost and one backup on a family homelab of one of the participants
   - To be continued
+    
+    
 </details>
 
