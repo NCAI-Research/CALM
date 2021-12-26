@@ -29,9 +29,13 @@ _NOTE: Kaggle gives you around 40 hrs per week of GPU time, so it's preferred ov
 
 #### 1. Using Kaggle **(recommended)**
 [![Open In Kaggle](https://img.shields.io/badge/kaggle-Open%20in%20Kaggle-blue.svg)](https://www.kaggle.com/prmais/volunteer-gpu-notebook)
+
 **(Please make sure to switch the "internet" ON, in kernel editor settings)** 
+
 If you are a new member at Kaggle
+
 1-Verified your phone number in the settings pane
+
 2-Enable "Internet"
 
 #### 2. Using Google Colab
