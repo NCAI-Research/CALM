@@ -204,13 +204,19 @@ class TPUSynchronizer:
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
             master_grads = [hp.grad for hp in self.master_model.parameters()]
 
+            replica_flatgrad = torch.cat([p.flatten() for p in replica_grads])
+
             ordinal = xm.get_ordinal()
-            replica_grads_if_master = tuple(grad[:(len(grad) if ordinal == 0 else 0)] for grad in replica_grads)
-            print(end=f"REPLICA {ordinal} GRADS: {[g.shape for g in replica_grads_if_master]}\n")
+            replica_flatgrad_if_master = replica_flatgrad[:(len(replica_flatgrad) if ordinal == 0 else 0)]
+            replica_flatgrad_cpu = replica_flatgrad_if_master.cpu()
+            print(end=f"REPLICA {ordinal} GRADS: {replica_flatgrad_cpu.shape}\n")
+            print('!!!')
+            xm.rendezvous("DEBUG1")
+            raise RuntimeError()
 
             xm.do_on_ordinals(
                 lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
-                data=tuple(replica_grads_if_master),
+                data=replica_grads_if_master,
                 ordinals=(0,),
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
