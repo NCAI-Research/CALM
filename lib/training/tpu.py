@@ -167,7 +167,7 @@ class TPUSynchronizer:
     """An auxiliary class for manipulating parameters and gradients without producing a ton of XLA graphs"""
 
     def __init__(self, model: nn.Module, post_init: callable = lambda model: model.tie_weights()):
-        self.master_model = model.share_memory()
+        self.master_model = model#.share_memory()TODO
         self.post_init = post_init
         for param in self.master_model.parameters():
             if param.grad is None:
