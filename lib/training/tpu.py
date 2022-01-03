@@ -204,28 +204,16 @@ class TPUSynchronizer:
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
             master_grads = [hp.grad for hp in self.master_model.parameters()]
 
-            # split gradients into chunks and run sequentially to save memory
-            source_chunk, target_chunk, chunk_size = [], [], 0
-            print("TOTAL SIZE", len(replica_grads))
-            assert len(master_grads) == len(replica_grads)
-            for source, target in zip(replica_grads, master_grads):
-                if len(source_chunk) != 0 and chunk_size + source.numel() >= GRAD_CHUNK_NUMEL:
-                    print("MOVING CHUNK", len(source_chunk), len(target_chunk), chunk_size)
-                    xm.do_on_ordinals(
-                        lambda *source_chunk: self._assign(source=source_chunk, target=target_chunk, add=add),
-                        data=tuple(source_chunk),
-                        ordinals=(0,),
-                    )  # ^-- do_on_ordinals already runs rendezvous at the end
-                    source_chunk, target_chunk, chunk_size = [], [], 0
-                source_chunk.append(source)
-                target_chunk.append(target)
-                chunk_size += source.numel()
-            print("MOVING FINAL CHUNK", len(source_chunk), len(target_chunk), chunk_size)
+            is_master = xm.is_master_ordinal()
+            replica_grads_if_master = [grad[:(0 if is_master else len(grad))] for grad in replica_grads]
+            print(end=f"REPLICA {xm.get_ordinal()} GRADS: {[g.shape for g in replica_grads]}\n")
+
             xm.do_on_ordinals(
-                lambda *source_chunk: self._assign(source=source_chunk, target=target_chunk, add=add),
-                data=tuple(source_chunk),
+                lambda *replica_grads: self._assign(source=replica_grads_if_master, target=master_grads, add=add),
+                data=tuple(replica_grads),
                 ordinals=(0,),
             )
+            # ^-- do_on_ordinals already runs rendezvous at the end
 
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
         for source_tensor, target_tensor in zip_longest(source, target):
