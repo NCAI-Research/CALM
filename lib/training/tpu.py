@@ -206,6 +206,7 @@ class TPUSynchronizer:
 
             ordinal = xm.get_ordinal()
             replica_grads_if_master = tuple(grad[:(len(grad) if ordinal == 0 else 0)] for grad in replica_grads)
+            print(end=f"REPLICA {ordinal} GRADS: {[g.shape for g in replica_grads_if_master]}\n")
 
             xm.do_on_ordinals(
                 lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
