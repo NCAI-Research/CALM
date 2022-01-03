@@ -172,7 +172,7 @@ class TPUSynchronizer:
                 if param.grad is not None:
                     memo[id(param.grad)] = None
             for buf in self.master_model.buffers():
-                memo[id(buf)] = buf.to(device)
+                memo[id(buf)] = buf.detach().to(device).requires_grad_(buf.requires_grad)
             replica = deepcopy(self.master_model, memo=memo).to(device)
 
         self.post_init(replica)
