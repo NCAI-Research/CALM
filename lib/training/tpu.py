@@ -172,7 +172,7 @@ class TPUSynchronizer:
         for param in self.master_model.parameters():
             if param.grad is None:
                 param.grad = torch.zeros_like(param)
-            param.grad = param.grad.share_memory_()
+            param.grad = param.grad#.share_memory_()
 
         from torch_xla.distributed.xla_multiprocessing import MpModelWrapper
         self._replica_source = MpModelWrapper(self.master_model)
