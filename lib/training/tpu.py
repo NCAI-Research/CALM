@@ -172,14 +172,24 @@ class TPUSynchronizer:
         for param in self.master_model.parameters():
             if param.grad is None:
                 param.grad = torch.zeros_like(param)
-            param.grad = param.grad#.share_memory_()
+            param.grad = param.grad#    .share_memory_()
 
         from torch_xla.distributed.xla_multiprocessing import MpModelWrapper
         self._replica_source = MpModelWrapper(self.master_model)
 
     def get_device_model_replica(self, device: torch.device):
         with torch.no_grad():
-            replica = self._replica_source.to(device)
+            memo = {}
+            for param in self._replica_source.parameters():
+                memo[id(param)] = torch.nn.Parameter(torch.zeros(*param.shape, dtype=param.dtype, device=device))
+                if param.grad is not None:
+                    memo[id(param.grad)] = torch.zeros_like(param, device=device)
+            for buf in self._replica_source.buffers():
+                memo[id(buf)] = buf.to(device)
+                if buf.grad is not None:
+                    memo[id(param.grad)] = torch.zeros_like(param, device=device)
+            replica = deepcopy(self._replica_source, memo=memo)
+
         self.post_init(replica)
         return replica
 
