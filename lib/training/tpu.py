@@ -165,7 +165,6 @@ class TPUSynchronizer:
             param.grad = param.grad.share_memory_()
 
     def get_device_model_replica(self, device: torch.device):
-        print("IN!!!")
         with torch.no_grad():
             memo = {}
             for param in self.master_model.parameters():
@@ -175,7 +174,6 @@ class TPUSynchronizer:
             for buf in self.master_model.buffers():
                 memo[id(buf)] = buf.to(device)
             replica = deepcopy(self.master_model, memo=memo).to(device)
-        print("OUT!!!")
 
         self.post_init(replica)
         for param in replica.parameters():
