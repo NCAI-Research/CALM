@@ -17,7 +17,7 @@ from hivemind.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-GRAD_CHUNK_NUMEL = 50_000_000  # transfer at most this many gradients to host per call to save memory
+GRAD_CHUNK_NUMEL = 20_000_000  # transfer at most this many gradients to host per call to save memory
 
 
 class TPUManager(mp.Process):
@@ -219,13 +219,11 @@ class TPUSynchronizer:
                 target_chunk.append(target)
                 chunk_size += source.numel()
             print("MOVING FINAL CHUNK", len(source_chunk), len(target_chunk), chunk_size)
-            source_chunk_if_master = [grad[:(len(grad) if ordinal == 0 else 0)] for grad in source_chunk]
             xm.do_on_ordinals(
                 lambda *source_chunk: self._assign(source=source_chunk, target=target_chunk, add=add),
                 data=tuple(source_chunk),
                 ordinals=(0,),
-            )
-            # ^-- do_on_ordinals already runs rendezvous at the end
+            ) # ^-- do_on_ordinals already runs rendezvous at the end
 
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
         for source_tensor, target_tensor in zip_longest(source, target):
