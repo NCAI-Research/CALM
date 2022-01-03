@@ -202,29 +202,34 @@ class TPUSynchronizer:
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
             master_grads = [hp.grad for hp in self.master_model.parameters()]
 
-            replica_flatgrad = torch.cat([p.flatten() for p in replica_grads])
-
             ordinal = xm.get_ordinal()
-            replica_flatgrad_if_master = replica_flatgrad[:(len(replica_flatgrad) if ordinal == 0 else 0)]
-            replica_flatgrad_cpu = replica_flatgrad_if_master.cpu()
-            print(end=f"REPLICA {ordinal} GRADS: {replica_flatgrad_cpu.shape}\n")
-            print('!!!')
-            xm.rendezvous("DEBUG1")
-            raise RuntimeError()
-
+            source_chunk, target_chunk, chunk_size = [], [], 0
+            print("TOTAL SIZE", len(replica_grads))
+            assert len(master_grads) == len(replica_grads)
+            for source, target in zip(replica_grads, master_grads):
+                if len(source_chunk) != 0 and chunk_size + source.numel() >= GRAD_CHUNK_NUMEL:
+                    print("MOVING CHUNK", len(source_chunk), len(target_chunk), chunk_size)
+                    xm.do_on_ordinals(
+                        lambda *source_chunk: self._assign(source=source_chunk, target=target_chunk, add=add),
+                        data=tuple(source_chunk),
+                        ordinals=(0,),
+                    )  # ^-- do_on_ordinals already runs rendezvous at the end
+                    source_chunk, target_chunk, chunk_size = [], [], 0
+                source_chunk.append(source)
+                target_chunk.append(target)
+                chunk_size += source.numel()
+            print("MOVING FINAL CHUNK", len(source_chunk), len(target_chunk), chunk_size)
+            source_chunk_if_master = [grad[:(len(grad) if ordinal == 0 else 0)] for grad in source_chunk]
             xm.do_on_ordinals(
-                lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
-                data=replica_grads_if_master,
+                lambda *source_chunk: self._assign(source=source_chunk, target=target_chunk, add=add),
+                data=tuple(source_chunk),
                 ordinals=(0,),
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
 
-    @torch.no_grad()
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
-        DBG_COUNTER = 0
         for source_tensor, target_tensor in zip_longest(source, target):
-            print(end=f"COPYING {DBG_COUNTER}\n")
-            DBG_COUNTER += 1
+            print(end="ASSIGN\n")
             assert source_tensor is not None or target_tensor is not None, "Source and target length must match exactly"
             if strict:
                 assert source_tensor.shape == target_tensor.shape
