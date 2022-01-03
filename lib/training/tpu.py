@@ -205,12 +205,12 @@ class TPUSynchronizer:
             master_grads = [hp.grad for hp in self.master_model.parameters()]
 
             ordinal = xm.get_ordinal()
-            replica_grads_if_master = [grad[:(0 if ordinal == 0 else len(grad))] for grad in replica_grads]
-            print(end=f"REPLICA {ordinal} GRADS: {[g.shape for g in replica_grads]}\n")
+            replica_grads_if_master = tuple(grad[:(0 if ordinal == 0 else len(grad))] for grad in replica_grads)
+            print(end=f"REPLICA {ordinal} GRADS: {[g.shape for g in replica_grads_if_master]}\n")
 
             xm.do_on_ordinals(
-                lambda *replica_grads: self._assign(source=replica_grads_if_master, target=master_grads, add=add),
-                data=tuple(replica_grads),
+                lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
+                data=tuple(replica_grads_if_master),
                 ordinals=(0,),
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
