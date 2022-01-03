@@ -96,18 +96,26 @@ class TPUManager(mp.Process):
         # set random seed for
         torch.manual_seed(self.seed_base + tpu_index)
         print("MEASURE RAM NOW!")
-        import time; time.sleep(60)
+        import time; time.sleep(30)
 
         # use staged init to minimize peak RAM usage
         for init_index in range(xm.xrt_world_size()):
-            xm.rendezvous(f"init_{init_index}")
+            xm.rendezvous(f"init_{init_index}_d")
             if tpu_index == init_index:
-                model = self._synchronizer.get_device_model_replica(device)
                 data_loader = self._data_manager.get_device_dataloader(
                     batch_size=self.batch_size_per_device, num_workers=0, collate_fn=self.collate_fn, pin_memory=False
                 )
                 data_loader_iter = iter(data_loader)
-                logger.info(f"Process {tpu_index} initialized.")
+                logger.info(f"Process {tpu_index} initialized DATA.")
+        print("MEASURE RAM NOW!")
+        import time; time.sleep(30)
+
+        for init_index in range(xm.xrt_world_size()):
+            xm.rendezvous(f"init_{init_index}_m")
+            if tpu_index == init_index:
+                model = self._synchronizer.get_device_model_replica(device)
+                logger.info(f"Process {tpu_index} initialized MODEL.")
+
 
         xm.rendezvous("init_finished")
         print("INIT_FINISHED")
