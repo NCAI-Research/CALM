@@ -204,9 +204,9 @@ class TPUSynchronizer:
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
             master_grads = [hp.grad for hp in self.master_model.parameters()]
 
-            is_master = xm.is_master_ordinal()
-            replica_grads_if_master = [grad[:(0 if is_master else len(grad))] for grad in replica_grads]
-            print(end=f"REPLICA {xm.get_ordinal()} GRADS: {[g.shape for g in replica_grads]}\n")
+            ordinal = xm.get_ordinal()
+            replica_grads_if_master = [grad[:(0 if ordinal == 0 else len(grad))] for grad in replica_grads]
+            print(end=f"REPLICA {ordinal} GRADS: {[g.shape for g in replica_grads]}\n")
 
             xm.do_on_ordinals(
                 lambda *replica_grads: self._assign(source=replica_grads_if_master, target=master_grads, add=add),
@@ -215,8 +215,12 @@ class TPUSynchronizer:
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
 
+    @torch.no_grad()
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
+        DBG_COUNTER = 0
         for source_tensor, target_tensor in zip_longest(source, target):
+            print(end=f"COPYING {DBG_COUNTER}\n")
+            DBG_COUNTER += 1
             assert source_tensor is not None or target_tensor is not None, "Source and target length must match exactly"
             if strict:
                 assert source_tensor.shape == target_tensor.shape
