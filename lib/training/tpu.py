@@ -95,6 +95,8 @@ class TPUManager(mp.Process):
 
         # set random seed for
         torch.manual_seed(self.seed_base + tpu_index)
+        print("MEASURE RAM NOW!")
+        import time; time.sleep(60)
 
         # use staged init to minimize peak RAM usage
         for init_index in range(xm.xrt_world_size()):
@@ -166,18 +168,8 @@ class TPUSynchronizer:
 
     def get_device_model_replica(self, device: torch.device):
         with torch.no_grad():
-            memo = {}
-            for param in self.master_model.parameters():
-                memo[id(param)] = torch.nn.Parameter(param.detach().to(device).requires_grad_(param.requires_grad))
-                if param.grad is not None:
-                    memo[id(param.grad)] = None
-            for buf in self.master_model.buffers():
-                memo[id(buf)] = buf.detach().to(device).requires_grad_(buf.requires_grad)
-            replica = deepcopy(self.master_model, memo=memo).to(device)
-
+            replica = self.master_model.to(device)
         self.post_init(replica)
-        for param in replica.parameters():
-            param.grad = torch.zeros_like(param, device=device)
         return replica
 
     def set_host_parameters(self, new_host_parameters):
