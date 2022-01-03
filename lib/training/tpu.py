@@ -174,8 +174,7 @@ class TPUSynchronizer:
                 param.grad = torch.zeros_like(param)
             param.grad = param.grad#    .share_memory_()
 
-        from torch_xla.distributed.xla_multiprocessing import MpModelWrapper
-        self._replica_source = MpModelWrapper(self.master_model)
+        self._replica_source = self.master_model
 
     def get_device_model_replica(self, device: torch.device):
         with torch.no_grad():
