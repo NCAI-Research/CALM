@@ -61,11 +61,7 @@ class TPUManager(mp.Process):
     def update_model_parameters(self, new_host_parameters):
         """Schedule TPUs to update model parameters during at the beginning of the next step"""
         with self.lock, torch.no_grad():
-            print("SETTING HOST PARAMETERS")
             self._synchronizer.set_host_parameters(new_host_parameters)
-            import time; time.sleep(30)
-            print("DONE!")
-
             self.should_load_parameters.value = True
 
     def get_aggregated_gradients(self):
@@ -119,9 +115,12 @@ class TPUManager(mp.Process):
                 self.step_triggered.clear()
 
             if bool(self.should_load_parameters.value):
-                with self.lock if xm.is_master_ordinal() else nullcontext():
+                with self.lock:
                     print("LOADING_PARAMS")
                     self._synchronizer.send_params_to_device(model)
+
+                xm.rendezvous("init finished")
+                if xm.is_master_ordinal():
                     self.should_load_parameters.value = False
 
 
@@ -211,6 +210,7 @@ class TPUSynchronizer:
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
 
+    @torch.no_grad()
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
         print(end=f"ASSIGN (add={add})\n")
         for source_tensor, target_tensor in zip_longest(source, target):
