@@ -148,12 +148,7 @@ class TPUManager(mp.Process):
                     loss += loss_i
                     del inputs, outputs, loss_i
 
-                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
-                loss = loss.cpu().item()  # trigger synchronization
-                if xm.is_master_ordinal():
-                    self.loss_accumulated.value = float(loss)
-                    self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
-
+                xm.rendezvous("after_step")
                 ### aggregate gradients from TPUs
                 with self.lock if xm.is_master_ordinal() else nullcontext():
                     self._synchronizer.aggregate_grads_on_host(model, add=True)
@@ -161,8 +156,11 @@ class TPUManager(mp.Process):
                 # clear aggregated gradients from all devices
                 model.zero_grad()
 
-                xm.rendezvous("after_step")
+                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
+                loss = loss.cpu().item()  # trigger synchronization
                 if xm.is_master_ordinal():
+                    self.loss_accumulated.value = float(loss)
+                    self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
                     self.step_finished.set()
 
             else:
