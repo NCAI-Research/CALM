@@ -100,6 +100,7 @@ class TPUManager(mp.Process):
 
         # acquire the (unique) Cloud TPU core corresponding to this process's index
         device = xm.xla_device()
+        dummy_tensor = torch.zeros(1, device=device)
         logger.info(f"Process {tpu_index} is using {xm.xla_real_devices([str(device)])[0]}")
 
         # set random seed for
@@ -126,14 +127,16 @@ class TPUManager(mp.Process):
 
             if self.action_code.value == TPUAction.UPDATE_PARAMS.value:
                 with self.lock if xm.is_master_ordinal() else nullcontext():
-                    print("LOADING_PARAMS")
-                    #TODO FIX MEself._synchronizer.send_params_to_device(model)
+                    print("LOADING_PARAMS", flush=True)
+                    self._synchronizer.send_params_to_device(model)
 
+                dummy_tensor.to(device='cpu').item()  # trigger synchronization
                 xm.rendezvous("after_step")
-                self.step_finished.set()
+                if xm.is_master_ordinal():
+                    self.step_finished.set()
 
             elif self.action_code.value == TPUAction.COMPUTE_GRADS.value:
-                print("DOING FWD-BWD")
+                print("DOING FWD-BWD", flush=True)
 
                 loss = 0.0
                 for i in range(self.grad_accumulation_steps):
@@ -145,19 +148,21 @@ class TPUManager(mp.Process):
                     loss += loss_i
                     del inputs, outputs, loss_i
 
-                xm.rendezvous("after_step")
+                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
+                loss = loss.cpu().item()  # trigger synchronization
+                if xm.is_master_ordinal():
+                    self.loss_accumulated.value = float(loss)
+                    self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
+
                 ### aggregate gradients from TPUs
                 with self.lock if xm.is_master_ordinal() else nullcontext():
                     self._synchronizer.aggregate_grads_on_host(model, add=True)
+
                 # clear aggregated gradients from all devices
                 model.zero_grad()
 
-                ### accumulate statistics to host
-                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
-                loss = loss.cpu().item()
+                xm.rendezvous("after_step")
                 if xm.is_master_ordinal():
-                    self.gradients_accumulated.value += self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
-                    self.loss_accumulated.value = float(loss)
                     self.step_finished.set()
 
             else:
