@@ -100,7 +100,6 @@ class TPUManager(mp.Process):
 
         # acquire the (unique) Cloud TPU core corresponding to this process's index
         device = xm.xla_device()
-        dummy_tensor = torch.zeros(1, device=device)
         logger.info(f"Process {tpu_index} is using {xm.xla_real_devices([str(device)])[0]}")
 
         # set random seed for
@@ -126,12 +125,12 @@ class TPUManager(mp.Process):
                 self.step_triggered.clear()
 
             if self.action_code.value == TPUAction.UPDATE_PARAMS.value:
-                with self.lock:#todo if xm.is_master_ordinal() else nullcontext():
+                with self.lock if xm.is_master_ordinal() else nullcontext():
                     print("LOADING_PARAMS", flush=True)
                     self._synchronizer.send_params_to_device(model)
 
-                dummy_tensor.to(device='cpu').item()  # trigger synchronization
-                xm.rendezvous("after_step")
+                xm.wait_device_ops()
+                xm.rendezvous("params_replicated")
                 if xm.is_master_ordinal():
                     self.step_finished.set()
 
@@ -148,7 +147,10 @@ class TPUManager(mp.Process):
                     loss += loss_i
                     del inputs, outputs, loss_i
 
-                xm.rendezvous("after_step")
+                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
+                loss = loss.cpu().item()  # trigger synchronization
+                xm.wait_device_ops()
+                xm.rendezvous("grads_computed")
                 ### aggregate gradients from TPUs
                 with self.lock if xm.is_master_ordinal() else nullcontext():
                     self._synchronizer.aggregate_grads_on_host(model, add=True)
@@ -156,8 +158,6 @@ class TPUManager(mp.Process):
                 # clear aggregated gradients from all devices
                 model.zero_grad()
 
-                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
-                loss = loss.cpu().item()  # trigger synchronization
                 if xm.is_master_ordinal():
                     self.loss_accumulated.value = float(loss)
                     self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
