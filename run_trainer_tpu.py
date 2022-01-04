@@ -50,17 +50,17 @@ def main():
     # warmup tpus
     logger.info("Waiting for TPUs to warm up, this may take a minute...")
     for i in range(10):
-        tpu_manager.step()
+        tpu_manager.compute_grads()
         logger.info("Warmup step 1 / 3 done.")
 
     for i in range(10):
         tpu_manager.update_model_parameters(model.parameters())
-        tpu_manager.step()
+        tpu_manager.compute_grads()
         logger.info("Warmup step 2 / 3 done.")
 
     for i in range(10):
         # TODO
-        tpu_manager.step()
+        tpu_manager.compute_grads()
         tpu_manager.get_aggregated_gradients()
         tpu_manager.zero_grad()
         logger.info("Warmup step 3 / 3 done.")
