@@ -160,12 +160,10 @@ class TPUManager(mp.Process):
                 if xm.is_master_ordinal():
                     self.gradients_accumulated.value += self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
                     self.loss_accumulated.value = float(loss)
-                self.step_finished.set()
+                    self.step_finished.set()
 
             else:
                 raise NotImplementedError(f"Unexpected action code {self.action_code.value}")
-
-            assert self.step_finished.is_set()
 
 
 class TPUSynchronizer:

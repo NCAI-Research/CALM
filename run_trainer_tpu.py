@@ -66,6 +66,7 @@ def main():
         logger.info("Warmup step 3 / 3 done.")
 
     # END init TPU
+    raise NotImplementedError()
 
 
     def push_params_onto_tpu():
@@ -73,7 +74,6 @@ def main():
         tpu_manager.update_model_parameters(model.parameters())
         tpu_manager.zero_grad()
 
-    raise NotImplementedError()
     collaborative_optimizer = task.collaborative_optimizer
     collaborative_optimizer.callbacks.on_after_global_step.add(push_params_onto_tpu)
     collaborative_optimizer.callbacks.on_load_state_from_peers(push_params_onto_tpu)
