@@ -3,6 +3,7 @@ import multiprocessing as mp
 import threading
 from contextlib import nullcontext
 from copy import deepcopy
+from enum import Enum, auto
 from functools import partial
 from itertools import zip_longest
 from typing import Iterable
@@ -16,6 +17,12 @@ import torch_xla.distributed.xla_multiprocessing as xmp
 from hivemind.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class TPUAction(Enum):
+    NONE = auto()
+    COMPUTE_GRADS = auto()
+    UPDATE_PARAMS = auto()
 
 
 class TPUManager(mp.Process):
@@ -45,7 +52,7 @@ class TPUManager(mp.Process):
         self._data_manager = TPUDataManager(dataset, nprocs, prefetch)
 
         # shared fields for communicating statistics after each step
-        self.should_load_parameters = mp.Value(ctypes.c_bool, False)
+        self.action_code = mp.Value(ctypes.c_int64, 0)
         self.gradients_accumulated = mp.Value(ctypes.c_long, 0)
         self.loss_accumulated = mp.Value(ctypes.c_double, 0)
         if start:
@@ -59,10 +66,23 @@ class TPUManager(mp.Process):
         thread.join()
 
     def update_model_parameters(self, new_host_parameters):
-        """Schedule TPUs to update model parameters during at the beginning of the next step"""
-        with self.lock, torch.no_grad():
-            self._synchronizer.set_host_parameters(new_host_parameters)
-            self.should_load_parameters.value = True
+        """Update TPU parameters to new_host_parameters"""
+        self._synchronizer.set_host_parameters(new_host_parameters)
+        self.action_code.value = TPUAction.UPDATE_PARAMS.value
+        self.step_finished.clear()
+        self.step_triggered.set()
+        self.step_finished.wait()
+        self.action_code.value = TPUAction.NONE.value
+
+    def compute_grads(self):
+        """run forward/backward step with all TPUs, collect gradients"""
+        self.loss_accumulated.value = self.gradients_accumulated.value = 0
+        self.action_code.value = TPUAction.COMPUTE_GRADS.value
+        self.step_finished.clear()
+        self.step_triggered.set()
+        self.step_finished.wait()
+        self.action_code.value = TPUAction.NONE.value
+        return self.loss_accumulated.value, self.gradients_accumulated.value
 
     def get_aggregated_gradients(self):
         """Get current accumulated gradients from the master model"""
@@ -75,13 +95,6 @@ class TPUManager(mp.Process):
             for param in self._synchronizer.master_model.parameters():
                 param.grad.zero_()
 
-    def step(self):
-        """run forward/backward step with all TPUs, collect gradients"""
-        self.loss_accumulated.value = self.gradients_accumulated.value = 0
-        self.step_finished.clear()
-        self.step_triggered.set()
-        self.step_finished.wait()
-        return self.loss_accumulated.value, self.gradients_accumulated.value
 
     def runner(self, tpu_index):
         """Run training steps from the perspective of a single TPU core"""
@@ -113,38 +126,46 @@ class TPUManager(mp.Process):
             if xm.is_master_ordinal():
                 self.step_triggered.clear()
 
-            if bool(self.should_load_parameters.value):
+            if self.action_code.value == TPUAction.UPDATE_PARAMS.value:
                 with self.lock if xm.is_master_ordinal() else nullcontext():
                     print("LOADING_PARAMS")
                     #TODO FIX MEself._synchronizer.send_params_to_device(model)
-                    self.should_load_parameters.value = False
 
-            loss = 0.0
-            for i in range(self.grad_accumulation_steps):
-                inputs = next(data_loader_iter)
-                outputs = model(**inputs)
-                loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-                loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-                loss_i.backward()
-                loss += loss_i
-                del inputs, outputs, loss_i
+                xm.rendezvous("after_step")
+                self.step_finished.set()
 
-            xm.rendezvous("after_step")
-            print("DONE FWD-BWD")
-            ### aggregate gradients from TPUs
-            with self.lock if xm.is_master_ordinal() else nullcontext():
-                self._synchronizer.aggregate_grads_on_host(model, add=True)
-            # clear aggregated gradients from all devices
-            model.zero_grad()
+            elif self.action_code.value == TPUAction.COMPUTE_GRADS.value:
+                print("DOING FWD-BWD")
 
-            ### accumulate statistics to host
-            loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
-            xm.do_on_ordinals(self._mark_step_finished, data=(loss,), ordinals=(0,))
+                loss = 0.0
+                for i in range(self.grad_accumulation_steps):
+                    inputs = next(data_loader_iter)
+                    outputs = model(**inputs)
+                    loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+                    loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+                    loss_i.backward()
+                    loss += loss_i
+                    del inputs, outputs, loss_i
 
-    def _mark_step_finished(self, loss):
-        self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
-        self.loss_accumulated.value = float(loss)
-        self.step_finished.set()
+                xm.rendezvous("after_step")
+                ### aggregate gradients from TPUs
+                with self.lock if xm.is_master_ordinal() else nullcontext():
+                    self._synchronizer.aggregate_grads_on_host(model, add=True)
+                # clear aggregated gradients from all devices
+                model.zero_grad()
+
+                ### accumulate statistics to host
+                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
+                loss = loss.cpu().item()
+                if xm.is_master_ordinal():
+                    self.gradients_accumulated.value += self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
+                    self.loss_accumulated.value = float(loss)
+                self.step_finished.set()
+
+            else:
+                raise NotImplementedError(f"Unexpected action code {self.action_code.value}")
+
+            assert self.step_finished.is_set()
 
 
 class TPUSynchronizer:
