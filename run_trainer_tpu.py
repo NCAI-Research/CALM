@@ -30,7 +30,7 @@ def main():
 
     utils.setup_logging(trainer_args)
     task = MLMTrainingTask(peer_args, trainer_args, collab_args)
-    model = task.model
+    model, optimizer = task.model, task.collaborative_optimizer
 
     # BEGIN init TPU
     assert trainer_args.do_train and not trainer_args.do_eval
@@ -59,11 +59,19 @@ def main():
     logger.info("Warmup step 3 / 3 done.")
     # END init TPU
 
+    for i in range(100):
+        #TODO
+        tpu_manager.step()
+        tpu_manager.get_aggregated_gradients()
+        tpu_manager.zero_grad()
+        logger.info("Warmup step 3 / 3 done.")
+
     def push_params_onto_tpu():
         logger.info("Pushing new params onto TPU.")
         tpu_manager.update_model_parameters(model.parameters())
         tpu_manager.zero_grad()
 
+    raise NotImplementedError()
     collaborative_optimizer = task.collaborative_optimizer
     collaborative_optimizer.callbacks.on_after_global_step.add(push_params_onto_tpu)
     collaborative_optimizer.callbacks.on_load_state_from_peers(push_params_onto_tpu)
