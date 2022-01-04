@@ -115,14 +115,10 @@ class TPUManager(mp.Process):
                 self.step_triggered.clear()
 
             if bool(self.should_load_parameters.value):
-                with self.lock:
+                with self.lock if xm.is_master_ordinal() else nullcontext():
                     print("LOADING_PARAMS")
                     self._synchronizer.send_params_to_device(model)
-
-                xm.rendezvous("init finished")
-                if xm.is_master_ordinal():
                     self.should_load_parameters.value = False
-
 
             loss = 0.0
             for i in range(self.grad_accumulation_steps):
