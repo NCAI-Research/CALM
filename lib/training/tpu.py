@@ -61,7 +61,11 @@ class TPUManager(mp.Process):
     def update_model_parameters(self, new_host_parameters):
         """Schedule TPUs to update model parameters during at the beginning of the next step"""
         with self.lock, torch.no_grad():
+            print("SETTING HOST PARAMETERS")
             self._synchronizer.set_host_parameters(new_host_parameters)
+            import time; time.sleep(30)
+            print("DONE!")
+
             self.should_load_parameters.value = True
 
     def get_aggregated_gradients(self):
