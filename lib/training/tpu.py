@@ -115,12 +115,15 @@ class TPUManager(mp.Process):
                 self.step_triggered.clear()
 
             if bool(self.should_load_parameters.value):
+                print("LOADING_PARAMS", flush=True)
                 with self.lock if xm.is_master_ordinal() else nullcontext():
-                    print("LOADING_PARAMS")
                     self._synchronizer.send_params_to_device(model)
+                    # ^-- this contains a barrier to ensure all tpus finish before we set flag to False
                     self.should_load_parameters.value = False
+                    xm.wait_device_ops()
 
 
+            print("DOING FWD-BWD", flush=True)
             loss = 0.0
             for i in range(self.grad_accumulation_steps):
                 print("FWD")
@@ -138,6 +141,7 @@ class TPUManager(mp.Process):
             ### aggregate gradients from TPUs
             with self.lock if xm.is_master_ordinal() else nullcontext():
                 self._synchronizer.aggregate_grads_on_host(model, add=True)
+            xm.wait_device_ops()
             # clear aggregated gradients from all devices
             model.zero_grad()
 
@@ -207,9 +211,10 @@ class TPUSynchronizer:
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
 
+    @torch.no_grad()
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
+        print(end=f"ASSIGN (add={add})\n")
         for source_tensor, target_tensor in zip_longest(source, target):
-            print(end="ASSIGN\n")
             assert source_tensor is not None or target_tensor is not None, "Source and target length must match exactly"
             if strict:
                 assert source_tensor.shape == target_tensor.shape
