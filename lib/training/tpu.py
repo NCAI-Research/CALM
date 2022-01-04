@@ -120,20 +120,18 @@ class TPUManager(mp.Process):
                     self._synchronizer.send_params_to_device(model)
                     # ^-- this contains a barrier to ensure all tpus finish before we set flag to False
                     self.should_load_parameters.value = False
-                    xm.wait_device_ops()
-
+                xm.wait_device_ops()
 
             print("DOING FWD-BWD", flush=True)
             loss = 0.0
             for i in range(self.grad_accumulation_steps):
-                print("FWD")
                 inputs = next(data_loader_iter)
                 outputs = model(**inputs)
                 loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
                 loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-                print("BWD")
                 loss_i.backward()
                 loss += loss_i
+                print(loss_i.device)
                 del inputs, outputs, loss_i
 
             xm.wait_device_ops()
@@ -202,7 +200,6 @@ class TPUSynchronizer:
         with torch.no_grad():
             replica_grads = [param.grad for param in replica.parameters()]
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
-            print([g.device for g in replica_grads])
             master_grads = [hp.grad for hp in self.master_model.parameters()]
 
             xm.do_on_ordinals(
