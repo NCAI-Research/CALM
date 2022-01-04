@@ -126,7 +126,7 @@ class TPUManager(mp.Process):
                 self.step_triggered.clear()
 
             if self.action_code.value == TPUAction.UPDATE_PARAMS.value:
-                with self.lock if xm.is_master_ordinal() else nullcontext():
+                with self.lock:#todo if xm.is_master_ordinal() else nullcontext():
                     print("LOADING_PARAMS", flush=True)
                     self._synchronizer.send_params_to_device(model)
 
@@ -206,10 +206,7 @@ class TPUSynchronizer:
             replica_params = list(replica.parameters())
             master_params = list(self.master_model.parameters())
             master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
-            #self._assign(source=master_params, target=replica_params, add=False)
-            # TEMP DEBUG TODO RESTORE
-
-            xm.rendezvous("params_replicated")
+            self._assign(source=master_params, target=replica_params, add=False)
 
     def aggregate_grads_on_host(self, replica: nn.Module, *, add: bool):
         """Aggregate grads from all tpu devices and move them to host"""
