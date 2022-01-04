@@ -136,12 +136,12 @@ class TPUManager(mp.Process):
                 loss += loss_i
                 del inputs, outputs, loss_i
 
+            xm.wait_device_ops()
             xm.rendezvous("after_step")
             print("AFTERSTEP")
             ### aggregate gradients from TPUs
             with self.lock if xm.is_master_ordinal() else nullcontext():
                 self._synchronizer.aggregate_grads_on_host(model, add=True)
-            xm.wait_device_ops()
             # clear aggregated gradients from all devices
             model.zero_grad()
 
@@ -202,6 +202,7 @@ class TPUSynchronizer:
         with torch.no_grad():
             replica_grads = [param.grad for param in replica.parameters()]
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
+            print([g.device for g in replica_grads])
             master_grads = [hp.grad for hp in self.master_model.parameters()]
 
             xm.do_on_ordinals(
