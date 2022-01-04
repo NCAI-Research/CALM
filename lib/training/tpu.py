@@ -72,7 +72,6 @@ class TPUManager(mp.Process):
         self.step_finished.clear()
         self.step_triggered.set()
         self.step_finished.wait()
-        self.action_code.value = TPUAction.NONE.value
 
     def compute_grads(self):
         """run forward/backward step with all TPUs, collect gradients"""
@@ -81,7 +80,6 @@ class TPUManager(mp.Process):
         self.step_finished.clear()
         self.step_triggered.set()
         self.step_finished.wait()
-        self.action_code.value = TPUAction.NONE.value
         return self.loss_accumulated.value, self.gradients_accumulated.value
 
     def get_aggregated_gradients(self):
