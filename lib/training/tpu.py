@@ -208,8 +208,8 @@ class TPUSynchronizer:
             # ^-- do_on_ordinals already runs rendezvous at the end
 
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
+        print(end=f"ASSIGN (add={add})\n")
         for source_tensor, target_tensor in zip_longest(source, target):
-            print(end="ASSIGN\n")
             assert source_tensor is not None or target_tensor is not None, "Source and target length must match exactly"
             if strict:
                 assert source_tensor.shape == target_tensor.shape

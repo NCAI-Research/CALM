@@ -30,7 +30,8 @@ def main():
 
     utils.setup_logging(trainer_args)
     task = MLMTrainingTask(peer_args, trainer_args, collab_args)
-    model, optimizer = task.model, task.collaborative_optimizer
+    model = task.model
+    assert task._collaborative_optimizer is None, "should not be initialized yet!"
 
     # BEGIN init TPU
     assert trainer_args.do_train and not trainer_args.do_eval
@@ -48,23 +49,24 @@ def main():
 
     # warmup tpus
     logger.info("Waiting for TPUs to warm up, this may take a minute...")
-    tpu_manager.step()
-    logger.info("Warmup step 1 / 3 done.")
-    tpu_manager.update_model_parameters(model.parameters())
-    tpu_manager.step()
-    logger.info("Warmup step 2 / 3 done.")
-    tpu_manager.step()
-    tpu_manager.get_aggregated_gradients()
-    tpu_manager.zero_grad()
-    logger.info("Warmup step 3 / 3 done.")
-    # END init TPU
+    for i in range(10):
+        tpu_manager.step()
+        logger.info("Warmup step 1 / 3 done.")
 
-    for i in range(100):
-        #TODO
+    for i in range(10):
+        tpu_manager.update_model_parameters(model.parameters())
+        tpu_manager.step()
+        logger.info("Warmup step 2 / 3 done.")
+
+    for i in range(10):
+        # TODO
         tpu_manager.step()
         tpu_manager.get_aggregated_gradients()
         tpu_manager.zero_grad()
         logger.info("Warmup step 3 / 3 done.")
+
+    # END init TPU
+
 
     def push_params_onto_tpu():
         logger.info("Pushing new params onto TPU.")

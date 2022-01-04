@@ -58,8 +58,8 @@ class MLMTrainingTask:
         if trainer_args.gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
 
-        self.current_sequence_length = mp.Value(ctypes.c_int64, self.trainer_args.max_sequence_length)
-        self.update_sequence_length()  # updated by callback
+        self.current_sequence_length = mp.Value(ctypes.c_int64, self.trainer_args.initial_sequence_length)
+        # ^- this value will be updated by callback.on_step_end
 
     @property
     def authorizer(self):
