@@ -123,7 +123,7 @@ class TPUManager(mp.Process):
                 xm.wait_device_ops()
 
             print("DOING FWD-BWD", flush=True)
-            loss = 0.0
+            loss = torch.zeros([], device=device)
             for i in range(self.grad_accumulation_steps):
                 inputs = next(data_loader_iter)
                 outputs = model(**inputs)
@@ -131,10 +131,10 @@ class TPUManager(mp.Process):
                 loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
                 loss_i.backward()
                 loss += loss_i
-                print(loss_i.device)
                 del inputs, outputs, loss_i
 
-            xm.wait_device_ops()
+            loss.cpu()  # trigger sync
+
             xm.rendezvous("after_step")
             print("AFTERSTEP")
             ### aggregate gradients from TPUs
@@ -212,6 +212,7 @@ class TPUSynchronizer:
     @torch.no_grad()
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
         print(end=f"ASSIGN (add={add})\n")
+        return #TODO DEBUG ONLY
         for source_tensor, target_tensor in zip_longest(source, target):
             assert source_tensor is not None or target_tensor is not None, "Source and target length must match exactly"
             if strict:
