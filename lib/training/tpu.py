@@ -106,7 +106,6 @@ class TPUManager(mp.Process):
                 logger.info(f"Process {tpu_index} initialized.")
 
         xm.rendezvous("init_finished")
-        print("INIT_FINISHED")
 
         while True:
             self.step_triggered.wait()
@@ -117,7 +116,7 @@ class TPUManager(mp.Process):
             if bool(self.should_load_parameters.value):
                 with self.lock if xm.is_master_ordinal() else nullcontext():
                     print("LOADING_PARAMS")
-                    self._synchronizer.send_params_to_device(model)
+                    #TODO FIX MEself._synchronizer.send_params_to_device(model)
                     self.should_load_parameters.value = False
 
             loss = 0.0
