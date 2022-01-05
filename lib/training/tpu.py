@@ -121,6 +121,7 @@ class TPUManager(mp.Process):
                     self._synchronizer.send_params_to_device(model)
                     # ^-- this contains a barrier to ensure all tpus finish before we set flag to False
                     self.should_load_parameters.value = False
+                import gc; gc.collect()
 
             print("DOING FWD-BWD", flush=True)
             loss = torch.zeros([], device=device)
