@@ -194,9 +194,10 @@ class TPUSynchronizer:
         """Copy params from master_model to this device_model replica"""
         with torch.no_grad():
             for i in range(xm.xrt_world_size()):
+                import gc; gc.collect()
                 if xm.get_ordinal() == i:
                     replica_params = list(replica.parameters())
-                    master_params = [param.to(xm.xla_device()) for param in self.master_model.parameters()]
+                    master_params = list(self.master_model.parameters())
                     # master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
                     self._assign(source=master_params, target=replica_params, add=False)
                     print(end=f"UPDATED PARAMS rank={i}\n")
