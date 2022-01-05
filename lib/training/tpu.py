@@ -122,6 +122,7 @@ class TPUManager(mp.Process):
                     # ^-- this contains a barrier to ensure all tpus finish before we set flag to False
                     self.should_load_parameters.value = False
 
+            xm.unlazy()
             print("DOING FWD-BWD", flush=True)
             loss = torch.zeros([], device=device)
             for i in range(self.grad_accumulation_steps):
@@ -133,6 +134,7 @@ class TPUManager(mp.Process):
                 loss += loss_i
                 del inputs, outputs, loss_i
 
+            xm.unlazy()
             xm.rendezvous("after_step")
             print("AFTERSTEP")
             ### aggregate gradients from TPUs
@@ -144,6 +146,7 @@ class TPUManager(mp.Process):
             ### accumulate statistics to host
             loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
             xm.do_on_ordinals(self._mark_step_finished, data=(loss,), ordinals=(0,))
+            xm.unlazy()
 
     def _mark_step_finished(self, loss):
         self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
@@ -209,7 +212,7 @@ class TPUSynchronizer:
 
             xm.do_on_ordinals(
                 lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
-                data=replica_grads,
+                data=tuple(replica_grads),
                 ordinals=(0,),
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
