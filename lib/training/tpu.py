@@ -212,7 +212,6 @@ class TPUSynchronizer:
     @torch.no_grad()
     def _assign(self, source: Iterable[torch.Tensor], target: Iterable[torch.Tensor], add: bool, strict: bool = False):
         print(end=f"ASSIGN (add={add})\n")
-        return #TODO DEBUG ONLY
         for source_tensor, target_tensor in zip_longest(source, target):
             assert source_tensor is not None or target_tensor is not None, "Source and target length must match exactly"
             if strict:
@@ -220,9 +219,9 @@ class TPUSynchronizer:
                 assert source_tensor.device == target_tensor.device
                 assert source_tensor.dtype == target_tensor.dtype
             if add:
-                target_tensor.add_(source_tensor)
+                target_tensor[:] += source_tensor
             else:
-                target_tensor.copy_(source_tensor)
+                target_tensor[:] = source_tensor
 
 
 class TPUDataManager:
