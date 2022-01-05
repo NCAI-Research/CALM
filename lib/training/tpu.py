@@ -10,7 +10,7 @@ from typing import Iterable
 import torch
 import torch.nn as nn
 import torch.utils.data
-import torch_xla
+import torch_xla.amp
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_multiprocessing as xmp
