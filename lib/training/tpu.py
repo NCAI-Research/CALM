@@ -135,18 +135,16 @@ class TPUManager(mp.Process):
 
             xm.rendezvous("after_step")
             print("AFTERSTEP")
-            with self.lock if xm.is_master_ordinal() else nullcontext(), torch.no_grad():
-                ### aggregate gradients from TPUs
+            ### aggregate gradients from TPUs
+            with self.lock if xm.is_master_ordinal() else nullcontext():
                 self._synchronizer.aggregate_grads_on_host(model, add=True)
 
-                # clear aggregated gradients from all devices
-                model.zero_grad()
+            # clear aggregated gradients from all devices
+            model.zero_grad()
 
-                ### accumulate statistics to host
-                loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
-                xm.do_on_ordinals(self._mark_step_finished, data=(loss,), ordinals=(0,))
-
-            xm.wait_device_ops()
+            ### accumulate statistics to host
+            loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
+            xm.do_on_ordinals(self._mark_step_finished, data=(loss,), ordinals=(0,))
 
     def _mark_step_finished(self, loss):
         self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
@@ -194,8 +192,8 @@ class TPUSynchronizer:
             for i in range(xm.xrt_world_size()):
                 if xm.get_ordinal() == i:
                     replica_params = list(replica.parameters())
-                    master_params = list(self.master_model.parameters())
-                    master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
+                    master_params = [param.to(xm.xla_device()) for param in self.master_model.parameters()]
+                    # master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
                     self._assign(source=master_params, target=replica_params, add=False)
                     print(end=f"UPDATED PARAMS rank={i}\n")
                 xm.rendezvous("params_replicated")
