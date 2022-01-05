@@ -11,6 +11,7 @@ import utils
 from arguments import (CollaborativeArguments, TPUTrainerArguments,
                        TrainingPeerArguments)
 from callback import CollaborativeCallback
+from lib.modules.linear import SharedMatrix, AdaptedLinear
 from lib.training.tpu import TPUManager
 from tasks.mlm.task import MLMTrainingTask
 
@@ -33,8 +34,14 @@ def main():
     model, optimizer = task.model, task.collaborative_optimizer
     # ^-- note: we know that the optimizer is initialized at this point
 
+    for module in model.modules():
+        if isinstance(module, SharedMatrix):
+            module.matrix = module.matrix.bfloat16()
+        if isinstance(module, AdaptedLinear):
+            module.adapter_first = module.adapter_first.bfloat16()
+            module.adapter_second = module.adapter_second.bfloat16()
+
     # BEGIN init TPU
-    model.bfloat16()
     assert trainer_args.do_train and not trainer_args.do_eval
     tpu_manager = TPUManager(
         model,

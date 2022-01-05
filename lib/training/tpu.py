@@ -122,7 +122,7 @@ class TPUManager(mp.Process):
                     # ^-- this contains a barrier to ensure all tpus finish before we set flag to False
                     self.should_load_parameters.value = False
 
-            print("NOT DOING FWD-BWD", flush=True)
+            print("DOING FWD-BWD", flush=True)
             loss = torch.zeros([], device=device)
             for i in range(self.grad_accumulation_steps):
                 inputs = next(data_loader_iter)
