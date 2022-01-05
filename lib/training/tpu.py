@@ -133,8 +133,6 @@ class TPUManager(mp.Process):
                 loss += loss_i
                 del inputs, outputs, loss_i
 
-            loss.cpu()  # trigger sync
-
             xm.rendezvous("after_step")
             print("AFTERSTEP")
             ### aggregate gradients from TPUs
