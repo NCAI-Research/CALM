@@ -122,16 +122,16 @@ class TPUManager(mp.Process):
                     # ^-- this contains a barrier to ensure all tpus finish before we set flag to False
                     self.should_load_parameters.value = False
 
-            print("DOING FWD-BWD", flush=True)
+            print("NOT DOING FWD-BWD", flush=True)
             loss = torch.zeros([], device=device)
-            for i in range(self.grad_accumulation_steps):
-                inputs = next(data_loader_iter)
-                outputs = model(**inputs)
-                loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-                loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-                loss_i.backward()
-                loss += loss_i
-                del inputs, outputs, loss_i
+            # for i in range(self.grad_accumulation_steps):
+            #     inputs = next(data_loader_iter)
+            #     outputs = model(**inputs)
+            #     loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+            #     loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+            #     loss_i.backward()
+            #     loss += loss_i
+            #     del inputs, outputs, loss_i
 
             xm.rendezvous("after_step")
             print("AFTERSTEP")
@@ -194,8 +194,7 @@ class TPUSynchronizer:
             master_params = list(self.master_model.parameters())
             master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
             self._assign(source=master_params, target=replica_params, add=False)
-            xm.rendezvous("params_replicated")
-        xm.mark_step()
+        xm.rendezvous("params_replicated")
 
     def aggregate_grads_on_host(self, replica: nn.Module, *, add: bool):
         """Aggregate grads from all tpu devices and move them to host"""
@@ -224,9 +223,9 @@ class TPUSynchronizer:
                 assert source_tensor.device == target_tensor.device
                 assert source_tensor.dtype == target_tensor.dtype
             if add:
-                target_tensor[:] += source_tensor
+                target_tensor.data.add_(source_tensor)
             else:
-                target_tensor[:] = source_tensor
+                target_tensor.data.copy_(source_tensor)
 
 
 class TPUDataManager:
