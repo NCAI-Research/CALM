@@ -73,7 +73,6 @@ class _GeneralizedLinear(torch.autograd.Function):
         adapter_first: torch.Tensor,
         adapter_second: torch.Tensor,
     ):
-        weight, adapter_first, adapter_second = weight.to(input.dtype), adapter_first.to(input.dtype), adapter_second.to(input.dtype)
         output, tensors_to_save = _GeneralizedLinear._forward_impl(input, weight, bias, adapter_first, adapter_second)
         ctx.save_for_backward(*tensors_to_save)
         return output

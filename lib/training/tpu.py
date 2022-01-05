@@ -195,9 +195,9 @@ class TPUSynchronizer:
         with torch.no_grad():
             replica_params = list(replica.parameters())
             master_params = list(self.master_model.parameters())
-            master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
+            # master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
             self._assign(source=master_params, target=replica_params, add=False)
-        xm.rendezvous("params_replicated")
+            xm.rendezvous("params_replicated")
 
     def aggregate_grads_on_host(self, replica: nn.Module, *, add: bool):
         """Aggregate grads from all tpu devices and move them to host"""
@@ -226,9 +226,10 @@ class TPUSynchronizer:
                 assert source_tensor.device == target_tensor.device
                 assert source_tensor.dtype == target_tensor.dtype
             if add:
-                target_tensor.data.add_(source_tensor)
+                target_tensor.data[:] = source_tensor
             else:
-                target_tensor.data.copy_(source_tensor)
+                target_tensor.data[:] += source_tensor
+        xm.wa
 
 
 class TPUDataManager:
