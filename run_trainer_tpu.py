@@ -31,6 +31,7 @@ def main():
     utils.setup_logging(trainer_args)
     task = MLMTrainingTask(peer_args, trainer_args, collab_args)
     model, optimizer = task.model, task.collaborative_optimizer
+    # ^-- note: we know that the optimizer is initialized at this point
 
     # BEGIN init TPU
     assert trainer_args.do_train and not trainer_args.do_eval
@@ -41,10 +42,11 @@ def main():
         grad_accumulation_steps=trainer_args.gradient_accumulation_steps,
         batch_size_per_device=trainer_args.per_device_train_batch_size,
         nprocs=trainer_args.num_tpus,
+        post_init=lambda model: model.tie_weights(),
+        compress_grads=True,
         start=True,
     )
-
-    model = task.model = tpu_manager._synchronizer.master_model
+    assert model is task.model and model is tpu_manager._synchronizer.master_model
 
     # warmup tpus
     logger.info("Waiting for TPUs to warm up, this may take a minute...")

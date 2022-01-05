@@ -32,7 +32,8 @@ class TPUManager(mp.Process):
         batch_size_per_device: int = 1,
         grad_accumulation_steps: int = 1,
         seed_base: int = 42,
-        post_init: callable = lambda model: model.tie_weights(),
+        post_init: callable = lambda model: None,
+        compress_grads: bool = True,
         start: bool,
     ):
         super().__init__()
@@ -41,7 +42,7 @@ class TPUManager(mp.Process):
         self.batch_size_per_device, self.grad_accumulation_steps = batch_size_per_device, grad_accumulation_steps
         self.collate_fn = collate_fn
         self.step_triggered, self.step_finished = mp.Event(), mp.Event()
-        self._synchronizer = TPUSynchronizer(model, post_init)
+        self._synchronizer = TPUSynchronizer(model, post_init, compress_grads)
         self._data_manager = TPUDataManager(dataset, nprocs, prefetch)
 
         # shared fields for communicating statistics after each step
@@ -120,7 +121,6 @@ class TPUManager(mp.Process):
                     self._synchronizer.send_params_to_device(model)
                     # ^-- this contains a barrier to ensure all tpus finish before we set flag to False
                     self.should_load_parameters.value = False
-                xm.wait_device_ops()
 
             print("DOING FWD-BWD", flush=True)
             loss = torch.zeros([], device=device)
@@ -154,8 +154,9 @@ class TPUManager(mp.Process):
 class TPUSynchronizer:
     """An auxiliary class for manipulating parameters and gradients without producing a ton of XLA graphs"""
 
-    def __init__(self, model: nn.Module, post_init: callable = lambda model: model.tie_weights()):
+    def __init__(self, model: nn.Module, post_init: callable, compress_grads: bool):
         self.master_model = model.share_memory()
+        self.compress_grads = compress_grads
         self.post_init = post_init
         for param in self.master_model.parameters():
             if param.grad is None:
@@ -187,11 +188,14 @@ class TPUSynchronizer:
     def send_params_to_device(self, replica: nn.Module):
         """Copy params from master_model to this device_model replica"""
         with torch.no_grad():
-            replica_params = list(replica.parameters())
-            master_params = list(self.master_model.parameters())
-            master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
-            self._assign(source=master_params, target=replica_params, add=False)
-            xm.rendezvous("params_replicated")
+            for i in range(xm.xrt_world_size()):
+                if xm.get_ordinal() == i:
+                    replica_params = list(replica.parameters())
+                    master_params = list(self.master_model.parameters())
+                    master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
+                    self._assign(source=master_params, target=replica_params, add=False)
+                    print(end=f"UPDATED PARAMS rank={i}\n")
+                xm.rendezvous("params_replicated")
 
     def aggregate_grads_on_host(self, replica: nn.Module, *, add: bool):
         """Aggregate grads from all tpu devices and move them to host"""
@@ -199,11 +203,13 @@ class TPUSynchronizer:
             master_grads = [hp.grad for hp in self.master_model.parameters()]
             replica_grads = [param.grad for param in replica.parameters()]
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
-            replica_grads_bf16 = tuple(grad.to(dtype=torch.bfloat16) for grad in replica_grads)
+
+            if self.compress_grads:
+                replica_grads = tuple(grad.to(dtype=torch.bfloat16) for grad in replica_grads)
 
             xm.do_on_ordinals(
                 lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
-                data=replica_grads_bf16,
+                data=replica_grads,
                 ordinals=(0,),
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
