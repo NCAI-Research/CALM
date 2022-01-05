@@ -168,13 +168,13 @@ class TPUSynchronizer:
         with torch.no_grad():
             memo = {}
             for param in self.master_model.parameters():
-                memo[id(param)] = torch.nn.Parameter(torch.ones(*param.shape, dtype=param.dtype, device=device))
+                memo[id(param)] = torch.nn.Parameter(torch.ones(*param.shape, dtype=torch.bfloat16, device=device))
                 if param.grad is not None:
-                    memo[id(param.grad)] = torch.ones_like(param, device=device)
+                    memo[id(param.grad)] = torch.ones_like(param, dtype=torch.bfloat16, device=device)
             for buf in self.master_model.buffers():
-                memo[id(buf)] = buf.to(device)
+                memo[id(buf)] = torch.ones_like(buf, dtype=torch.bfloat16, device=device)
                 if buf.grad is not None:
-                    memo[id(param.grad)] = torch.ones_like(param, device=device)
+                    memo[id(param.grad)] = torch.ones_like(buf, dtype=torch.bfloat16, device=device)
             replica = deepcopy(self.master_model, memo=memo)
 
         self.post_init(replica)
