@@ -139,13 +139,16 @@ class TPUManager(mp.Process):
             ### aggregate gradients from TPUs
             with self.lock if xm.is_master_ordinal() else nullcontext():
                 self._synchronizer.aggregate_grads_on_host(model, add=True)
-
+            import gc;
+            gc.collect()
             # clear aggregated gradients from all devices
             model.zero_grad()
 
             ### accumulate statistics to host
             loss = xm.all_reduce(xm.REDUCE_SUM, loss, scale=1.0)
             xm.do_on_ordinals(self._mark_step_finished, data=(loss,), ordinals=(0,))
+            import gc;
+            gc.collect()
 
     def _mark_step_finished(self, loss):
         self.gradients_accumulated.value = self.batch_size_per_device * self.nprocs * self.grad_accumulation_steps
