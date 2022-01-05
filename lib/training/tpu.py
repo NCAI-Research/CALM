@@ -10,7 +10,6 @@ from typing import Iterable
 import torch
 import torch.nn as nn
 import torch.utils.data
-import torch_xla.amp
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_multiprocessing as xmp
@@ -124,17 +123,15 @@ class TPUManager(mp.Process):
                 xm.wait_device_ops()
 
             print("DOING FWD-BWD", flush=True)
-            with torch_xla.amp.autocast():
-                loss = torch.zeros([], device=device)
-                for i in range(self.grad_accumulation_steps):
-                    inputs = next(data_loader_iter)
-
-                    outputs = model(**inputs)
-                    loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-                    loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-                    loss_i.backward()
-                    loss += loss_i
-                    del inputs, outputs, loss_i
+            loss = torch.zeros([], device=device)
+            for i in range(self.grad_accumulation_steps):
+                inputs = next(data_loader_iter)
+                outputs = model(**inputs)
+                loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+                loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+                loss_i.backward()
+                loss += loss_i
+                del inputs, outputs, loss_i
 
             loss.cpu()  # trigger sync
 
@@ -171,13 +168,13 @@ class TPUSynchronizer:
         with torch.no_grad():
             memo = {}
             for param in self.master_model.parameters():
-                memo[id(param)] = torch.nn.Parameter(torch.ones(*param.shape, dtype=torch.bfloat16, device=device))
+                memo[id(param)] = torch.nn.Parameter(torch.zeros(*param.shape, dtype=param.dtype, device=device))
                 if param.grad is not None:
-                    memo[id(param.grad)] = torch.ones_like(param, dtype=torch.bfloat16, device=device)
+                    memo[id(param.grad)] = torch.zeros_like(param, device=device)
             for buf in self.master_model.buffers():
-                memo[id(buf)] = torch.ones_like(buf, dtype=torch.bfloat16, device=device)
+                memo[id(buf)] = buf.to(device)
                 if buf.grad is not None:
-                    memo[id(param.grad)] = torch.ones_like(buf, dtype=torch.bfloat16, device=device)
+                    memo[id(param.grad)] = torch.zeros_like(buf, device=device)
             replica = deepcopy(self.master_model, memo=memo)
 
         self.post_init(replica)
@@ -201,13 +198,14 @@ class TPUSynchronizer:
     def aggregate_grads_on_host(self, replica: nn.Module, *, add: bool):
         """Aggregate grads from all tpu devices and move them to host"""
         with torch.no_grad():
+            master_grads = [hp.grad for hp in self.master_model.parameters()]
             replica_grads = [param.grad for param in replica.parameters()]
             replica_grads = xm.all_reduce(xm.REDUCE_SUM, replica_grads, scale=1.0)
-            master_grads = [hp.grad for hp in self.master_model.parameters()]
+            replica_grads_bf16 = tuple(grad.to(dtype=torch.bfloat16) for grad in replica_grads)
 
             xm.do_on_ordinals(
                 lambda *replica_grads: self._assign(source=replica_grads, target=master_grads, add=add),
-                data=tuple(replica_grads),
+                data=replica_grads_bf16,
                 ordinals=(0,),
             )
             # ^-- do_on_ordinals already runs rendezvous at the end
