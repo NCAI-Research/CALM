@@ -229,7 +229,6 @@ class TPUSynchronizer:
                 target_tensor.data[:] = source_tensor
             else:
                 target_tensor.data[:] += source_tensor
-        xm.wait_device_ops()
 
 
 class TPUDataManager:
