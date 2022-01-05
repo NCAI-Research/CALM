@@ -36,10 +36,7 @@ def main():
 
     for module in model.modules():
         if isinstance(module, SharedMatrix):
-            module.matrix = module.matrix.bfloat16()
-        if isinstance(module, AdaptedLinear):
-            module.adapter_first = module.adapter_first.bfloat16()
-            module.adapter_second = module.adapter_second.bfloat16()
+            module.bfloat1l6()
 
     # BEGIN init TPU
     assert trainer_args.do_train and not trainer_args.do_eval
