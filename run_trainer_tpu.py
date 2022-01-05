@@ -34,6 +34,7 @@ def main():
     # ^-- note: we know that the optimizer is initialized at this point
 
     # BEGIN init TPU
+    model.bfloat16()
     assert trainer_args.do_train and not trainer_args.do_eval
     tpu_manager = TPUManager(
         model,
