@@ -166,23 +166,29 @@ class TPUSynchronizer:
             param.grad = param.grad.share_memory_()
 
     def get_device_model_replica(self, device: torch.device):
-        with torch.no_grad():
-            memo = {}
-            for param in self.master_model.parameters():
-                memo[id(param)] = torch.nn.Parameter(torch.zeros(*param.shape, dtype=param.dtype, device=device))
-                if param.grad is not None:
-                    memo[id(param)].grad = torch.zeros_like(param, device=device)
-            for buf in self.master_model.buffers():
-                memo[id(buf)] = buf.to(device)
-                if buf.grad is not None:
-                    memo[id(param.grad)] = torch.zeros_like(buf, device=device)
-            replica = deepcopy(self.master_model, memo=memo)
-
+        replica = deepcopy(self.master_model).to(device)
         self.post_init(replica)
         for param in replica.parameters():
-            if param.grad is None:
-                param.grad = torch.zeros_like(param, device=device)
+            param.grad = torch.zeros_like(param, device=device)
         return replica
+        # commented code: this is an alternative version of the same thing as below. It works faster and does NOT allocate memory initially, but may hog it later.
+        # with torch.no_grad():
+        #     memo = {}
+        #     for param in self.master_model.parameters():
+        #         memo[id(param)] = torch.nn.Parameter(torch.zeros(*param.shape, dtype=param.dtype, device=device))
+        #         if param.grad is not None:
+        #             memo[id(param)].grad = torch.zeros_like(param, device=device)
+        #     for buf in self.master_model.buffers():
+        #         memo[id(buf)] = buf.to(device)
+        #         if buf.grad is not None:
+        #             memo[id(param.grad)] = torch.zeros_like(buf, device=device)
+        #     replica = deepcopy(self.master_model, memo=memo)
+        #
+        # self.post_init(replica)
+        # for param in replica.parameters():
+        #     if param.grad is None:
+        #         param.grad = torch.zeros_like(param, device=device)
+        # return replica
 
     def set_host_parameters(self, new_host_parameters):
         return self._assign(source=self.master_model.parameters(), target=new_host_parameters, add=False, strict=True)
