@@ -124,14 +124,14 @@ class TPUManager(mp.Process):
 
             print("NOT DOING FWD-BWD", flush=True)
             loss = torch.zeros([], device=device)
-            # for i in range(self.grad_accumulation_steps):
-            #     inputs = next(data_loader_iter)
-            #     outputs = model(**inputs)
-            #     loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-            #     loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-            #     loss_i.backward()
-            #     loss += loss_i
-            #     del inputs, outputs, loss_i
+            for i in range(self.grad_accumulation_steps):
+                inputs = next(data_loader_iter)
+                outputs = model(**inputs)
+                loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+                loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+                loss_i.backward()
+                loss += loss_i
+                del inputs, outputs, loss_i
 
             xm.rendezvous("after_step")
             print("AFTERSTEP")
@@ -171,7 +171,7 @@ class TPUSynchronizer:
             for param in self.master_model.parameters():
                 memo[id(param)] = torch.nn.Parameter(torch.zeros(*param.shape, dtype=param.dtype, device=device))
                 if param.grad is not None:
-                    memo[id(param.grad)] = torch.zeros_like(param, device=device)
+                    memo[id(param)].grad = torch.zeros_like(param, device=device)
             for buf in self.master_model.buffers():
                 memo[id(buf)] = buf.to(device)
                 if buf.grad is not None:
@@ -179,6 +179,9 @@ class TPUSynchronizer:
             replica = deepcopy(self.master_model, memo=memo)
 
         self.post_init(replica)
+        for param in replica.parameters():
+            if param.grad is None:
+                param.grad = torch.zeros_like(param, device=device)
         return replica
 
     def set_host_parameters(self, new_host_parameters):
