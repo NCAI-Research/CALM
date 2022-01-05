@@ -38,9 +38,15 @@ def main():
         for module in model.modules():
             if isinstance(module, SharedMatrix):
                 module.matrix.data = module.matrix.bfloat16()
+                if module.matrix.grad is not None:
+                    module.matrix.grad.data = module.matrix.grad.data.bfloat16()
             if isinstance(module, AdaptedLinear):
                 module.adapter_first.data = module.adapter_first.bfloat16()
                 module.adapter_second.data = module.adapter_second.bfloat16()
+                if module.adapter_first.grad is not None:
+                    module.adapter_first.grad.data = module.adapter_first.grad.data.bfloat16()
+                if module.adapter_second.grad is not None:
+                    module.adapter_second.grad.data = module.adapter_second.grad.data.bfloat16()
 
     # BEGIN init TPU
     assert trainer_args.do_train and not trainer_args.do_eval
