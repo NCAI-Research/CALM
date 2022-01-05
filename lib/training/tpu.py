@@ -10,6 +10,7 @@ from typing import Iterable
 import torch
 import torch.nn as nn
 import torch.utils.data
+import torch_xla
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_multiprocessing as xmp
@@ -123,15 +124,17 @@ class TPUManager(mp.Process):
                 xm.wait_device_ops()
 
             print("DOING FWD-BWD", flush=True)
-            loss = torch.zeros([], device=device)
-            for i in range(self.grad_accumulation_steps):
-                inputs = next(data_loader_iter)
-                outputs = model(**inputs)
-                loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-                loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
-                loss_i.backward()
-                loss += loss_i
-                del inputs, outputs, loss_i
+            with torch_xla.amp.autocast():
+                loss = torch.zeros([], device=device)
+                for i in range(self.grad_accumulation_steps):
+                    inputs = next(data_loader_iter)
+
+                    outputs = model(**inputs)
+                    loss_i = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+                    loss_i = loss_i / (self.grad_accumulation_steps * self.nprocs)
+                    loss_i.backward()
+                    loss += loss_i
+                    del inputs, outputs, loss_i
 
             loss.cpu()  # trigger sync
 
