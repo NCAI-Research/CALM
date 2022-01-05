@@ -190,14 +190,11 @@ class TPUSynchronizer:
     def send_params_to_device(self, replica: nn.Module):
         """Copy params from master_model to this device_model replica"""
         with torch.no_grad():
-            for i in range(xm.xrt_world_size()):
-                if xm.get_ordinal() == i:
-                    replica_params = list(replica.parameters())
-                    master_params = list(self.master_model.parameters())
-                    # master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
-                    self._assign(source=master_params, target=replica_params, add=False)
-                    print(end=f"UPDATED PARAMS rank={i}\n")
-                xm.rendezvous("params_replicated")
+            replica_params = list(replica.parameters())
+            master_params = list(self.master_model.parameters())
+            master_params = xm.send_cpu_data_to_device(master_params, xm.xla_device())
+            self._assign(source=master_params, target=replica_params, add=False)
+            xm.rendezvous("params_replicated")
 
     def aggregate_grads_on_host(self, replica: nn.Module, *, add: bool):
         """Aggregate grads from all tpu devices and move them to host"""
