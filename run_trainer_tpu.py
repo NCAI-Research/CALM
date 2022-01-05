@@ -34,9 +34,13 @@ def main():
     model, optimizer = task.model, task.collaborative_optimizer
     # ^-- note: we know that the optimizer is initialized at this point
 
-    for module in model.modules():
-        if isinstance(module, SharedMatrix):
-            module.bfloat1l6()
+    with torch.no_grad():
+        for module in model.modules():
+            if isinstance(module, SharedMatrix):
+                module.matrix.data = module.matrix.bfloat16()
+            if isinstance(module, AdaptedLinear):
+                module.adapter_first.data = module.adapter_first.bfloat16()
+                module.adapter_second.data = module.adapter_second.bfloat16()
 
     # BEGIN init TPU
     assert trainer_args.do_train and not trainer_args.do_eval
