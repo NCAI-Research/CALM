@@ -62,8 +62,8 @@ def main():
         start=True,
     )
     assert model is task.model and model is tpu_manager._synchronizer.master_model
-    assert any(param.dtype == torch.float16 for param in optimizer.state_averager.main_parameters)
-    assert not any(param.dtype == torch.float16 for group in optimizer.state_averager.optimizer.param_groups for param in group["params"])
+    assert any(param.dtype == torch.bfloat16 for param in optimizer.state_averager.main_parameters)
+    assert not any(param.dtype == torch.bfloat16 for group in optimizer.state_averager.optimizer.param_groups for param in group["params"])
 
 
     # warmup tpus
