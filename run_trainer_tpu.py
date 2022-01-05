@@ -34,14 +34,6 @@ def main():
     model, optimizer = task.model, task.collaborative_optimizer
     # ^-- note: we know that the optimizer is initialized at this point
 
-    with torch.no_grad():
-        for module in model.modules():
-            if isinstance(module, SharedMatrix):
-                module.matrix.data = module.matrix.half()
-            if isinstance(module, AdaptedLinear):
-                module.adapter_first.data = module.adapter_first.half()
-                module.adapter_second.data = module.adapter_second.half()
-
     # BEGIN init TPU
     assert trainer_args.do_train and not trainer_args.do_eval
     tpu_manager = TPUManager(
@@ -56,9 +48,6 @@ def main():
         start=True,
     )
     assert model is task.model and model is tpu_manager._synchronizer.master_model
-    assert any(param.dtype == torch.float16 for param in optimizer.state_averager.main_parameters)
-    assert not any(param.dtype == torch.float16 for group in optimizer.state_averager.optimizer.param_groups for param in group["params"])
-
 
     # warmup tpus
     logger.info("Waiting for TPUs to warm up, this may take a minute...")
