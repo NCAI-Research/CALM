@@ -50,9 +50,9 @@ def main():
 
     # warmup tpus
     logger.info("Waiting for TPUs to warm up, this may take a minute...")
-    for i in range(10):
-        tpu_manager.step()
-        logger.info("Warmup step 1 / 3 done.")
+    # for i in range(10):
+    #     tpu_manager.step()
+    #     logger.info("Warmup step 1 / 3 done.")
 
     for i in range(10):
         tpu_manager.update_model_parameters(model.parameters())
