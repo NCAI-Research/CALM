@@ -276,7 +276,7 @@ python run_trainer.py --run_id $EXP_NAME --host_maddrs $LISTEN_ON --announce_mad
     
   (THE TEXT BELOW IS UNDER CONSTRUCTION)
   
-  __Swarm composition:__ 2-3 peers with public IP as initial peers for redundancy.
+  __Swarm composition:__ 2-3 peers with public IP as `--initial_peers` for redundancy.
     
 __Support infrastructure: go cheap, go redundant.__ 
 
@@ -295,8 +295,14 @@ Training chronicles:
   - 2021.12.17 - took a close look at data preprocessing, found several major bugs
   - 2021.12.19 - tested volunteer starter code
   - 2021.12.21-22 - started three initial peers: one on GCP, Pebblehost and one backup on a family homelab of one of the participants
+  - 2021.12.30 - passed the loss<=9 threshold
+    ![image](https://user-images.githubusercontent.com/3491902/148602504-8f893f79-0d79-401c-aa6c-8018ffac28ba.png)
+  - 2022.01.02 - added [the dashboard](https://huggingface.co/spaces/CALM/Dashboard) that shows training progress and contributions (by @SaulLu)
+  - status on TPU: @justheuristic got it running, but it takes just a bit more RAM than we have available (so it works for a slightly smaller model)
+  - 2022.01.04 - got too many volunteers, some noticed that gradient averaging does not finish in time (TimeoutError in logs)
+  - 2022.01.07 - added more auxiliary peers from the same source (pebblehost, trying hetzner)
   - To be continued
-    
-    
+
+
 </details>
 
