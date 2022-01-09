@@ -197,7 +197,7 @@ class LeanAlbertForSequenceClassification(AlbertForSequenceClassification, PreTr
     base_model_prefix = "lean_albert"
 
     def __init__(self, config: config_class):
-        super().__init__(config)
+        PreTrainedModel.__init__(self,config)
         self.num_labels = config.num_labels
         self.config = config
         self.albert = LeanAlbertModel(config, add_pooling_layer=True)
@@ -205,3 +205,4 @@ class LeanAlbertForSequenceClassification(AlbertForSequenceClassification, PreTr
         self.classifier = nn.Linear(config.hidden_size, self.config.num_labels)
 
         self.init_weights()
+
