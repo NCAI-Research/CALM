@@ -17,7 +17,7 @@ class CollaborativeArguments:
         default=60.0, metadata={"help": "Averaging group will wait for stragglers for at most this many seconds"}
     )
     next_chunk_timeout: float = field(
-        default=30.0, metadata={"help": "Consider allreduce peer failed if it does not respond in this many seconds"}
+        default=60.0, metadata={"help": "Consider allreduce peer failed if it does not respond in this many seconds"}
     )
     averaging_timeout: float = field(
         default=480.0, metadata={"help": "Give up on averaging step after this many seconds"}
