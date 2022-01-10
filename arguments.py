@@ -20,7 +20,7 @@ class CollaborativeArguments:
         default=60.0, metadata={"help": "Consider allreduce peer failed if it does not respond in this many seconds"}
     )
     averaging_timeout: float = field(
-        default=480.0, metadata={"help": "Give up on averaging step after this many seconds"}
+        default=600.0, metadata={"help": "Give up on averaging step after this many seconds"}
     )
     offload_optimizer: bool = field(default=True, metadata={"help": "Whether or not to offload optimizer into RAM"})
     delay_optimizer_step: bool = field(
