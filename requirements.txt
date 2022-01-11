@@ -1,4 +1,4 @@
-git+git://github.com/learning-at-home/hivemind@calm
+https://github.com/learning-at-home/hivemind/archive/calm.zip
 bitsandbytes-cuda111>=0.26.0
 transformers==4.12.2
 tokenizers>=0.10.2
