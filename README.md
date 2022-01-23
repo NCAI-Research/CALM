@@ -1,4 +1,4 @@
-<img src="./assets/calmNewLogo.png" width="200" alt="CALM Logo">
+<img src="./assets/calmNewLogo.png" width="800" alt="CALM Logo">
 
 # CALM: Collaborative Arabic Language Model
 
