@@ -1,4 +1,4 @@
-<img src="./assets/calmNewLogo.png" width="600" alt="CALM Logo">
+<img src="./assets/calmNewLogo.png" width="400" alt="CALM Logo">
 
 The CALM project is joint effort lead by [NCAI](https://sdaia.gov.sa/ncai/?Lang=en) in collaboration with [Yandex](https://yandex.com/) and [HuggingFace](https://huggingface.co/) to train an Arabic language model with volunteers from around the globe. The project is an adaptation of the framework proposed at the NeurIPS 2021 demonstration: [Training Transformers Together](https://huggingface.co/training-transformers-together). 
 
