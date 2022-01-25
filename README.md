@@ -122,7 +122,7 @@ cd CALM && pip install -q -r requirements.txt &> log
 
 # re-install bitsandbytes for the actual CUDA version
 pip uninstall -y bitsandbytes-cuda111
-pip install -y bitsandbytes-cuda113==0.26.0
+pip install bitsandbytes-cuda113==0.26.0
 
 curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
 sudo apt-get install git-lfs
