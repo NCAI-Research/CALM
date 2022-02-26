@@ -70,7 +70,7 @@ def sent_tokenize(text: str) -> List[str]:
 
 def tokenize_function(tokenizer, examples, max_sequence_length: mp.sharedctypes.Synchronized):
     # Remove empty texts
-    texts = [text for text in examples["text"] if len(text) > 0 and not text.isspace()]
+    texts = [text for text in examples["text"] if text is not None and len(text) > 0 and not text.isspace()]
     new_examples = defaultdict(list)
 
     for text in texts:
