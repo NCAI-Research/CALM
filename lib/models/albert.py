@@ -179,14 +179,14 @@ class LeanAlbertForTokenClassification(AlbertForTokenClassification, PreTrainedM
     base_model_prefix = "lean_albert"
 
     def __init__(self, config: config_class):
-        super().__init__(config)
+        super().__init__(self,config)
         self.num_labels = config.num_labels
-
-        self.albert = LeanAlbertModel(config, add_pooling_layer=False)
+        self.config = config
+        self.albert = LeanAlbertModel(config, add_pooling_layer=True)
         classifier_dropout_prob = (
             config.classifier_dropout_prob if config.classifier_dropout_prob is not None else config.hidden_dropout_prob
         )
-        self.dropout = nn.Dropout(classifier_dropout_prob)
+        self.dropout = nn.Dropout(config.classifier_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, self.config.num_labels)
 
         self.init_weights()
