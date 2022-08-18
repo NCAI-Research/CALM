@@ -1,5 +1,5 @@
 https://github.com/learning-at-home/hivemind/archive/calm.zip
-bitsandbytes-cuda111==0.26.0
+bitsandbytes-cuda111==0.26.0.post2
 transformers==4.12.2
 tokenizers==0.10.3
 datasets==1.17.0
